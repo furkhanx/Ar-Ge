@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bugün Ne Yemek Yapsam?</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              maroon: '#800000',
+              ivory: '#fffff0',
+              darkbg: '#000000',
+              darkcard: '#121212',
+              darkborder: '#222222'
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Temel geçiş efektleri ve stabilite */
+      html {
+        background-color: #fffff0; /* Failsafe */
+      }
+      html.dark {
+        background-color: #000000;
+      }
+      
+      body {
+        transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        margin: 0;
+        min-height: 100vh;
+      }
+
+      /* Scrollbar özelleştirme */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #80000044;
+        border-radius: 10px;
+      }
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #80000088;
+      }
+
+      /* Animasyonlar */
+      @keyframes scaleUp {
+        from { opacity: 0; transform: scale(0.98); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .animate-scaleUp {
+        animation: scaleUp 0.3s ease-out forwards;
+      }
+
+      /* Input placeholder renkleri */
+      .dark input::placeholder {
+        color: #4b5563;
+      }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+</head>
+<body class="bg-ivory dark:bg-darkbg text-gray-900 dark:text-gray-100 transition-colors duration-300">
+    <div id="root"></div>
+</body>
+</html>
