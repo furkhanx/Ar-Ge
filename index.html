@@ -24,10 +24,9 @@
     }
   </script>
   <style>
-    /* Temel geçiş efektleri ve stabilite */
+    /* Temel geçiş efektleri */
     html {
       background-color: #fffff0;
-      /* Failsafe */
     }
 
     html.dark {
@@ -35,49 +34,9 @@
     }
 
     body {
-      transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: background-color 0.4s ease, color 0.4s ease;
       margin: 0;
       min-height: 100vh;
-    }
-
-    /* Scrollbar özelleştirme */
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #80000044;
-      border-radius: 10px;
-    }
-
-    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #80000088;
-    }
-
-    /* Animasyonlar */
-    @keyframes scaleUp {
-      from {
-        opacity: 0;
-        transform: scale(0.98);
-      }
-
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-
-    .animate-scaleUp {
-      animation: scaleUp 0.3s ease-out forwards;
-    }
-
-    /* Input placeholder renkleri */
-    .dark input::placeholder {
-      color: #4b5563;
     }
   </style>
 </head>
