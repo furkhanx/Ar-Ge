@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Recipe, Source } from "../types";
+import { Recipe, Source, FilterState } from "../types";
 
 const MAX_RETRIES = 1; 
 const INITIAL_RETRY_DELAY = 500;
@@ -44,13 +44,31 @@ const RECIPE_SCHEMA = {
       cookingTime: { type: Type.STRING },
       difficulty: { 
         type: Type.STRING,
-        description: "Zorluk seviyesi: 'Çok Kolay', 'Kolay', 'Orta' veya 'Zor' değerlerinden biri olmalı."
+        description: "Zorluk seviyesi: 'Çok Kolay', 'Kolay', 'Orta' veya 'Zor'."
       },
       calories: { type: Type.STRING },
       category: { type: Type.STRING },
+      dietaryTags: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "Alerjen ve diyet bilgileri."
+      },
       videoUrl: { 
         type: Type.STRING, 
-        description: "Yemeğin YouTube'daki en popüler ve kaliteli 'nasıl yapılır' videosunun linki. Mutlaka geçerli bir youtube.com veya youtu.be linki olmalı."
+        description: "Yemeğin YouTube'daki 'nasıl yapılır' videosunun linki."
+      },
+      imageUrl: {
+        type: Type.STRING,
+        description: "Yemeğin gerçek sunum fotoğrafı linki. Google Search aracı kullanılarak bulunmalıdır."
+      },
+      servings: {
+        type: Type.NUMBER,
+        description: "Bu tarifin kaç kişilik olduğu (varsayılan sayı)."
+      },
+      substitutions: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "Eksik malzemeler için alternatif öneriler (örn: 'Soğan yerine pırasa kullanabilirsiniz')."
       },
       ingredients: {
         type: Type.ARRAY,
@@ -58,20 +76,21 @@ const RECIPE_SCHEMA = {
           type: Type.OBJECT,
           properties: {
             name: { type: Type.STRING },
-            amount: { type: Type.STRING }
+            amount: { 
+              type: Type.STRING,
+              description: "Miktar ve birim. Sayı ile başlamalıdır (örn: '2 adet', '500 gr')." 
+            }
           },
           required: ["name", "amount"]
         }
       },
       instructions: {
         type: Type.ARRAY,
-        items: { 
-          type: Type.STRING,
-          description: "Hazırlanış adımları: Aşırı detaylı, püf noktaları içeren, teknikleri açıklayan profesyonel şef anlatımı."
-        }
+        items: { type: Type.STRING },
+        description: "Tarifin hazırlanış adımları. Her adım çok detaylı, açıklayıcı ve püf noktalarıyla birlikte yazılmalıdır."
       }
     },
-    required: ["id", "title", "description", "ingredients", "instructions", "cookingTime", "difficulty", "calories", "videoUrl"]
+    required: ["id", "title", "description", "ingredients", "instructions", "cookingTime", "difficulty", "calories", "videoUrl", "dietaryTags", "servings"]
   }
 };
 
@@ -93,32 +112,38 @@ export const analyzeIngredientsFromImage = async (base64Image: string, mimeType:
       contents: [
         {
           parts: [
-            {
-              inlineData: {
-                data: base64Image,
-                mimeType: mimeType
-              }
-            },
-            {
-              text: "Bu fotoğraftaki yiyecek malzemelerini tespit et. Sadece malzeme isimlerini virgülle ayırarak tek bir satırda yaz. Örn: Domates, Salatalık, Tavuk göğsü"
-            }
+            { inlineData: { data: base64Image, mimeType: mimeType } },
+            { text: "Bu fotoğraftaki yiyecek malzemelerini tespit et. Sadece malzeme isimlerini virgülle ayırarak tek bir satırda yaz." }
           ]
         }
       ]
     });
-
     const text = response.text || "";
     return text.split(',').map(item => item.trim()).filter(item => item.length > 0);
   });
 };
 
-export const generateRecipesFromIngredients = async (ingredients: string[], mode: 'strict' | 'flexible', count: number = 8): Promise<Recipe[]> => {
+export const generateRecipesFromIngredients = async (ingredients: string[], mode: 'strict' | 'flexible', filters: FilterState, category: string, count: number = 8): Promise<Recipe[]> => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
+    let contextPrompt = "";
+    // Eski filtreler (fallback)
+    if (filters.cuisine && filters.cuisine !== 'all') contextPrompt += ` Mutfak Kültürü: ${filters.cuisine}.`;
+    if (filters.mood && filters.mood !== 'all') contextPrompt += ` Mod/Durum: ${filters.mood}.`;
+    if (filters.diet && filters.diet !== 'all') contextPrompt += ` Diyet/Tercih: ${filters.diet}.`;
+    
+    // Yeni detaylı filtreler
+    if (filters.mealType && filters.mealType !== 'all') contextPrompt += ` Öğün: ${filters.mealType}.`;
+    if (filters.cookingMethod && filters.cookingMethod !== 'all') contextPrompt += ` Pişirme Yöntemi: ${filters.cookingMethod}.`;
+    if (filters.prepTime && filters.prepTime !== 'all') contextPrompt += ` Hazırlama Süresi: ${filters.prepTime}.`;
+    if (filters.specialOccasion && filters.specialOccasion !== 'all') contextPrompt += ` Özel Durum: ${filters.specialOccasion}.`;
+
+    if (category && category !== 'Tüm Kategoriler') contextPrompt += ` ÖNEMLİ: Sadece '${category}' kategorisine uygun tarifler üret.`;
+
     const searchPrompt = mode === 'strict' 
-      ? `HIZLI & GÜNCEL: SADECE şu malzemelerle yapılabilecek ${count} tarif bul: ${ingredients.join(', ')}. Popüler YouTube kanallarını ve yemek sitelerini tara. Her tarif için mutlaka çalışan bir YouTube video linki bul. JSON formatında dön.`
-      : `HIZLI & GÜNCEL: Şu malzemeleri içeren en popüler ${count} tarifi bul: ${ingredients.join(', ')}. İnternetteki güncel ve sevilen YouTube videolarını ve tariflerini getir. Her tarif için mutlaka çalışan bir YouTube video linki bul. JSON formatında dön.`;
+      ? `HIZLI & GÜNCEL: SADECE şu malzemelerle yapılabilecek ${count} tarif bul: ${ingredients.join(', ')}.${contextPrompt} Popüler YouTube kanallarını tara ve çalışan link ekle. Google Search aracını kullanarak bu yemeğe ait GERÇEK bir fotoğraf URL'si bul ve 'imageUrl' alanına ekle (stok fotoğraf olmasın). Porsiyon bilgisini (sayı olarak) ekle. Hazırlanış adımlarını (instructions) maddeler halinde, çok detaylı, püf noktalarıyla ve kıvam bilgileriyle birlikte uzun uzun, açıklayıcı şekilde yaz. Eksik malzeme varsa 'substitutions' alanında alternatif öner. JSON dön.`
+      : `HIZLI & GÜNCEL: Şu malzemeleri içeren en popüler ${count} tarifi bul: ${ingredients.join(', ')}.${contextPrompt} Mutlaka çalışan YouTube linki ekle. Google Search aracını kullanarak bu yemeğe ait GERÇEK bir fotoğraf URL'si bul ve 'imageUrl' alanına ekle. Porsiyon bilgisini (sayı olarak) ekle. Hazırlanış adımlarını (instructions) maddeler halinde, çok detaylı, püf noktalarıyla ve kıvam bilgileriyle birlikte uzun uzun, açıklayıcı şekilde yaz. Eksik malzeme varsa 'substitutions' alanında alternatif öner. JSON dön.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -133,17 +158,27 @@ export const generateRecipesFromIngredients = async (ingredients: string[], mode
 
     const recipes: Recipe[] = JSON.parse(response.text || "[]");
     const sources = extractSources(response);
-    
     return recipes.map(r => ({ ...r, sources }));
   });
 };
 
-export const generateChefRecommendations = async (type: 'meal' | 'dessert', count: number = 8): Promise<Recipe[]> => {
+export const generateChefRecommendations = async (type: 'meal' | 'dessert' | 'savory', filters: FilterState, count: number = 8): Promise<Recipe[]> => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const categoryName = type === 'meal' ? 'Ana Yemek' : 'Tatlı';
+    let categoryName = '';
     
-    const prompt = `HIZLI & GÜNCEL: Türk mutfağından bugün için ${categoryName} kategorisinde ${count} trend tarif önerisi bul. YouTube üzerinde en çok izlenen ve beğenilen videoları referans alarak videoUrl kısmına linklerini ekle. JSON formatında dön.`;
+    switch(type) {
+        case 'meal': categoryName = 'Ana Yemek'; break;
+        case 'dessert': categoryName = 'Tatlı'; break;
+        case 'savory': categoryName = 'Tuzlu Atıştırmalık/Börek/Poğaça'; break;
+    }
+
+    let contextPrompt = "";
+    if (filters.cuisine && filters.cuisine !== 'all') contextPrompt += ` Mutfak Kültürü: ${filters.cuisine}.`;
+    if (filters.mood && filters.mood !== 'all') contextPrompt += ` Mod/Durum: ${filters.mood}.`;
+    if (filters.diet && filters.diet !== 'all') contextPrompt += ` Diyet/Tercih: ${filters.diet}.`;
+    
+    const prompt = `HIZLI & GÜNCEL: Bugün için ${categoryName} kategorisinde ${count} trend tarif önerisi bul.${contextPrompt} YouTube videolarını ekle. Google Search aracını kullanarak her yemeğe ait GERÇEK bir fotoğraf URL'si bul ve 'imageUrl' alanına ekle. Porsiyon bilgisini ekle. Hazırlanış adımlarını (instructions) maddeler halinde, çok detaylı, püf noktalarıyla ve kıvam bilgileriyle birlikte uzun uzun, açıklayıcı şekilde yaz. JSON dön.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -158,7 +193,6 @@ export const generateChefRecommendations = async (type: 'meal' | 'dessert', coun
 
     const recipes: Recipe[] = JSON.parse(response.text || "[]");
     const sources = extractSources(response);
-    
     return recipes.map(r => ({ ...r, sources }));
   });
 };

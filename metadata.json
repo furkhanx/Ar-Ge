@@ -2,6 +2,7 @@
   "name": "Bugün Ne Yemek Yapsam?",
   "description": "Evdeki malzemelerinize göre lezzetli yemek tarifleri sunan, her tarife özel yapay zeka tarafından oluşturulmuş videolar içeren ve günlük yemek fikirleri sunan kapsamlı bir mutfak asistanı.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "microphone"
   ]
 }
